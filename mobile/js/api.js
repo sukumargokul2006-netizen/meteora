@@ -55,7 +55,7 @@ class MeteoraAPIConnector {
    */
   async getLiveWeather(latitude, longitude) {
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,uv_index&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m,dew_point_2m,visibility&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,uv_index&models=best_match,gfs_seamless&timezone=auto`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("Open-Meteo fetch failed");
       return await res.json();
