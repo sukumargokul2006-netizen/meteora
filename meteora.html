@@ -1615,7 +1615,6 @@
       </div>
 
       <div style="display: flex; align-items: center; gap: 8px;">
-        <button id="tempUnitToggleBtn" title="Toggle Temperature Unit (°C / °F)" style="background: rgba(7,95,128,0.12); border: 1px solid var(--border-accent); border-radius: 12px; padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--primary); cursor: pointer; transition: all 0.2s ease;">°C</button>
         <button class="profile-quick-btn" id="openProfileSheetBtn" title="Open profile" aria-label="Open profile">U</button>
         <!-- Location Picker Pill -->
         <button class="mobile-location-btn" id="openLocationSheetBtn" title="Change Location">
@@ -1919,7 +1918,7 @@
           </div>
         </div>
 
-        <!-- Open-Meteo Grid (Google Weather & Climate Aligned) -->
+        <!-- Open-Meteo Grid -->
         <div class="tab-content-panel active" id="tabMobileOpenMeteo">
           <div class="weather-metrics-2col">
             <div class="metric-chip">
@@ -1941,16 +1940,6 @@
               <div class="metric-chip-title">🧭 Humidity / Press.</div>
               <div class="metric-chip-val" id="mValHumidity">78%</div>
               <div class="metric-chip-sub" id="mValPressure">1012 hPa</div>
-            </div>
-            <div class="metric-chip">
-              <div class="metric-chip-title">🍃 Air Quality (AQI)</div>
-              <div class="metric-chip-val" id="mValAQI">42 — Good</div>
-              <div class="metric-chip-sub" id="mValPM25">PM2.5: 10.2 µg/m³</div>
-            </div>
-            <div class="metric-chip">
-              <div class="metric-chip-title">👁️ Dew Point / Vis.</div>
-              <div class="metric-chip-val" id="mValDewPoint">22.4°C</div>
-              <div class="metric-chip-sub" id="mValVisibility">Vis: 10.0 km</div>
             </div>
           </div>
         </div>
@@ -2144,9 +2133,6 @@
       },
       currentWeather: null,
       hourlyForecast: null,
-      dailyForecast: null,
-      airQuality: null,
-      tempUnit: 'C',
       activeQuery: "Will it rain during my evening commute?",
       intent: {
         category: 'COMMUTE_SAFETY',
@@ -2162,14 +2148,6 @@
       isRecordingVoice: false,
       isPlayingTTS: false
     };
-
-    function formatTempExact(celsiusVal) {
-      if (celsiusVal === undefined || celsiusVal === null || isNaN(celsiusVal)) return '--';
-      if (state.tempUnit === 'F') {
-        return `${((celsiusVal * 9/5) + 32).toFixed(1)}°F`;
-      }
-      return `${celsiusVal.toFixed(1)}°C`;
-    }
 
     const translations = {
       en: {
@@ -2215,7 +2193,7 @@
         descAsk: 'ಪಠ್ಯ ಅಥವಾ ಧ್ವನಿಯಿಂದ ಹವಾಮಾನ ಪ್ರಶ್ನೆ ಕೇಳಿ.', descAlerts: 'ನಿಮ್ಮ ಸ್ಥಳದ ಸಕ್ರಿಯ ಹವಾಮಾನ ಎಚ್ಚರಿಕೆಗಳನ್ನು ನೋಡಿ.',
         descAdvisory: 'ಪ್ರಸ್ತುತ ಪರಿಸ್ಥಿತಿಗೆ ಶಿಫಾರಸು ಮಾಡಿದ ಕ್ರಮಗಳನ್ನು ನೋಡಿ.', descRisk: 'ಲೈವ್ ಬಹು-ಅಂಶ ಹವಾಮಾನ ಅಪಾಯ ಸ್ಕೋರ್ ನೋಡಿ.',
         descForecast: 'ಮುಂದಿನ ಎಂಟು ಗಂಟೆಗಳ ಹವಾಮಾನ ನೋಡಿ.', descFeeds: 'ಲೈವ್ ಡೇಟಾ, IMD ಬುಲೆಟಿನ್ ಮತ್ತು ಹವಾಮಾನ ಸಾಮಾನ್ಯಗಳನ್ನು ಹೋಲಿಸಿ.',
-        descFollowups: 'ಈ ಮುನ್ನೋಟದ ಕುರಿತು ಸ್ಮಾರْت್ ಪ್ರಶ್ನೆಗಳನ್ನು ಮುಂದುವರಿಸಿ.'
+        descFollowups: 'ಈ ಮುನ್ನೋಟದ ಕುರಿತು ಸ್ಮಾರ್ಟ್ ಪ್ರಶ್ನೆಗಳನ್ನು ಮುಂದುವರಿಸಿ.'
       }
     };
 
@@ -2253,44 +2231,43 @@
     setInterval(updateMobileClock, 1000);
     updateMobileClock();
 
-    // --- Weather Codes to Google Weather Standard Terminology ---
+    // --- Weather Codes to Human Readable Data ---
     function interpretWmoCode(code) {
       const mapping = {
-        0: { desc: 'Sunny / Clear', icon: '☀️', riskMod: -10 },
-        1: { desc: 'Mostly Sunny', icon: '🌤️', riskMod: -5 },
+        0: { desc: 'Clear Sky', icon: '☀️', riskMod: -10 },
+        1: { desc: 'Mainly Clear', icon: '🌤️', riskMod: -5 },
         2: { desc: 'Partly Cloudy', icon: '⛅', riskMod: 0 },
-        3: { desc: 'Cloudy / Overcast', icon: '☁️', riskMod: 10 },
-        45: { desc: 'Haze & Fog', icon: '🌫️', riskMod: 25 },
-        48: { desc: 'Rime Fog', icon: '🌫️', riskMod: 30 },
+        3: { desc: 'Overcast', icon: '☁️', riskMod: 10 },
+        45: { desc: 'Foggy Conditions', icon: '🌫️', riskMod: 25 },
+        48: { desc: 'Depositing Fog', icon: '🌫️', riskMod: 30 },
         51: { desc: 'Light Drizzle', icon: '🌦️', riskMod: 20 },
-        53: { desc: 'Drizzle', icon: '🌦️', riskMod: 30 },
-        55: { desc: 'Heavy Drizzle', icon: '🌧️', riskMod: 40 },
+        53: { desc: 'Moderate Drizzle', icon: '🌦️', riskMod: 30 },
+        55: { desc: 'Dense Drizzle', icon: '🌧️', riskMod: 40 },
         61: { desc: 'Light Rain', icon: '🌦️', riskMod: 35 },
-        63: { desc: 'Rain', icon: '🌧️', riskMod: 55 },
-        65: { desc: 'Heavy Rain', icon: '⛈️', riskMod: 75 },
+        63: { desc: 'Moderate Rain', icon: '🌧️', riskMod: 55 },
+        65: { desc: 'Heavy Downpour', icon: '⛈️', riskMod: 75 },
         71: { desc: 'Light Snow', icon: '🌨️', riskMod: 50 },
-        73: { desc: 'Snow', icon: '❄️', riskMod: 65 },
-        75: { desc: 'Heavy Snow', icon: '❄️', riskMod: 85 },
-        80: { desc: 'Scattered Showers', icon: '🌦️', riskMod: 35 },
+        73: { desc: 'Moderate Snow', icon: '❄️', riskMod: 65 },
+        75: { desc: 'Heavy Snowfall', icon: '❄️', riskMod: 85 },
+        80: { desc: 'Rain Showers', icon: '🌦️', riskMod: 35 },
         81: { desc: 'Heavy Showers', icon: '🌧️', riskMod: 60 },
-        82: { desc: 'Torrential Downpour', icon: '⛈️', riskMod: 85 },
-        95: { desc: 'Thunderstorms', icon: '⚡', riskMod: 80 },
-        96: { desc: 'Thunderstorms & Hail', icon: '⛈️', riskMod: 90 },
+        82: { desc: 'Violent Showers', icon: '⛈️', riskMod: 85 },
+        95: { desc: 'Thunderstorm', icon: '⚡', riskMod: 80 },
+        96: { desc: 'Thunderstorm & Hail', icon: '⛈️', riskMod: 90 },
         99: { desc: 'Severe Hailstorm', icon: '🌩️', riskMod: 98 },
       };
-      return mapping[code] || { desc: 'Partly Cloudy', icon: '⛅', riskMod: 10 };
+      return mapping[code] || { desc: 'Variably Cloudy', icon: '⛅', riskMod: 10 };
     }
 
-    // --- Fetch Live Weather Data from Open-Meteo (Google Weather / GFS Aligned) ---
+    // --- Fetch Live Weather Data from Open-Meteo ---
     async function fetchWeatherData(lat, lon) {
       try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_gusts_10m,dew_point_2m,visibility&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,uv_index,relative_humidity_2m,dew_point_2m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&models=best_match,gfs_seamless&timezone=auto`;
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,uv_index&timezone=auto`;
         const res = await fetch(url);
         if (!res.ok) throw new Error("API response not ok");
         const data = await res.json();
         state.currentWeather = data.current;
         state.hourlyForecast = data.hourly;
-        state.dailyForecast = data.daily;
         renderWeatherWidgets(data);
         return data;
       } catch (err) {
@@ -2298,133 +2275,9 @@
         const fallback = generateRealisticMockWeather();
         state.currentWeather = fallback.current;
         state.hourlyForecast = fallback.hourly;
-        state.dailyForecast = fallback.daily;
         renderWeatherWidgets(fallback);
         return fallback;
       }
-    }
-
-    // --- Fetch Air Quality Index (Google Weather AQI Alignment) ---
-    async function fetchAirQualityData(lat, lon) {
-      try {
-        const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,ozone&timezone=auto`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("AQI API error");
-        const data = await res.json();
-        state.airQuality = data.current;
-        renderAQIWidget(data.current);
-        return data.current;
-      } catch (e) {
-        const fallback = { us_aqi: 42, pm2_5: 10.2, pm10: 22.4, ozone: 35.1 };
-        state.airQuality = fallback;
-        renderAQIWidget(fallback);
-        return fallback;
-      }
-    }
-
-    function renderAQIWidget(aqiData) {
-      const aqi = aqiData ? Math.round(aqiData.us_aqi || 42) : 42;
-      let status = 'Good';
-      if (aqi > 150) { status = 'Unhealthy'; }
-      else if (aqi > 100) { status = 'Sensitive'; }
-      else if (aqi > 50) { status = 'Moderate'; }
-
-      const aqiEl = document.getElementById('mValAQI');
-      if (aqiEl) aqiEl.textContent = `${aqi} — ${status}`;
-      const pmEl = document.getElementById('mValPM25');
-      if (pmEl) pmEl.textContent = `PM2.5: ${aqiData && aqiData.pm2_5 ? aqiData.pm2_5.toFixed(1) : '10.2'} µg/m³`;
-    }
-
-    // --- Fetch Live Historical ERA5 Climate Baseline (Google Climate Alignment) ---
-    async function fetchClimateNormals(lat, lon) {
-      const climateContentEl = document.getElementById('tabMobileClimate');
-      if (!climateContentEl) return;
-      try {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const pastYear = currentYear - 1;
-        const startDate = `${pastYear}-01-01`;
-        const endDate = `${pastYear}-12-31`;
-        const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Climate archive response not ok");
-        const data = await res.json();
-        
-        if (data.daily && data.daily.temperature_2m_max) {
-          const tempsMax = data.daily.temperature_2m_max;
-          const tempsMin = data.daily.temperature_2m_min;
-          const precips = data.daily.precipitation_sum;
-
-          const monthIndex = now.getMonth();
-          const monthMaxs = [];
-          const monthMins = [];
-          let monthPrecipSum = 0;
-
-          data.daily.time.forEach((tStr, i) => {
-            const d = new Date(tStr);
-            if (d.getMonth() === monthIndex) {
-              if (tempsMax[i] !== null && tempsMax[i] !== undefined) monthMaxs.push(tempsMax[i]);
-              if (tempsMin[i] !== null && tempsMin[i] !== undefined) monthMins.push(tempsMin[i]);
-              if (precips[i] !== null && precips[i] !== undefined) monthPrecipSum += precips[i];
-            }
-          });
-
-          const avgMax = monthMaxs.length ? (monthMaxs.reduce((a,b)=>a+b,0)/monthMaxs.length) : 28.5;
-          const avgMin = monthMins.length ? (monthMins.reduce((a,b)=>a+b,0)/monthMins.length) : 19.2;
-          
-          const currentTemp = state.currentWeather ? state.currentWeather.temperature_2m : 26.4;
-          const tempDiff = (currentTemp - avgMax).toFixed(1);
-          const diffSign = tempDiff >= 0 ? `+${tempDiff}°C` : `${tempDiff}°C`;
-
-          const maxDisplay = state.tempUnit === 'F' ? `${Math.round((avgMax*9/5)+32)}°F` : `${avgMax.toFixed(1)}°C`;
-          const minDisplay = state.tempUnit === 'F' ? `${Math.round((avgMin*9/5)+32)}°F` : `${avgMin.toFixed(1)}°C`;
-
-          climateContentEl.innerHTML = `
-            <div class="google-climate-card" style="font-size: 11px; line-height: 1.5; color: var(--text-main); background: rgba(24,43,72,0.06); padding: 12px; border-radius: 10px; border: 1px solid var(--border-accent);">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:700; font-size:12px; color:var(--primary);">🌐 Google Climate / ERA5 Normals</span>
-                <span class="g-badge" style="font-size:9px; background:rgba(7,95,128,0.15); color:var(--primary); padding:2px 6px; border-radius:4px; font-weight:700;">ERA5 BASELINE</span>
-              </div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                <span style="color:var(--text-muted)">Current Month Normal High:</span>
-                <span style="font-weight:600;">${maxDisplay}</span>
-              </div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                <span style="color:var(--text-muted)">Current Month Normal Low:</span>
-                <span style="font-weight:600;">${minDisplay}</span>
-              </div>
-              <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                <span style="color:var(--text-muted)">Live Temp vs Baseline:</span>
-                <span style="font-weight:700; color:${tempDiff >= 0 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${diffSign} ${tempDiff >= 0 ? 'above' : 'below'} normal</span>
-              </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span style="color:var(--text-muted)">Historical Monthly Rainfall:</span>
-                <span style="font-weight:600;">${monthPrecipSum.toFixed(0)} mm</span>
-              </div>
-            </div>
-          `;
-          return;
-        }
-      } catch (e) {
-        console.warn("Could not fetch climate archive normals:", e);
-      }
-      
-      climateContentEl.innerHTML = `
-        <div style="font-size: 11px; line-height: 1.5; color: var(--text-main); background: rgba(24,43,72,0.06); padding: 10px; border-radius: 8px;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span style="color:var(--text-muted)">30-Yr Normal High:</span>
-            <span>28.1°C</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span style="color:var(--text-muted)">Monthly Climate Departure:</span>
-            <span style="color:var(--primary); font-weight:700;">+0.8°C (Google Aligned)</span>
-          </div>
-          <div style="display:flex; justify-content:space-between;">
-            <span style="color:var(--text-muted)">Forecast Ensemble:</span>
-            <span>GFS Seamless / ECMWF</span>
-          </div>
-        </div>
-      `;
     }
 
     function generateRealisticMockWeather() {
@@ -2438,9 +2291,7 @@
           weather_code: 63,
           wind_speed_10m: 18.2,
           wind_gusts_10m: 41.5,
-          pressure_msl: 1012.4,
-          dew_point_2m: 22.4,
-          visibility: 10000
+          pressure_msl: 1012.4
         },
         hourly: {
           time: Array.from({length: 8}, (_, i) => new Date(now.getTime() + i * 3600000).toISOString()),
@@ -2457,12 +2308,7 @@
       const rainP = data.hourly?.precipitation_probability ? Math.max(...data.hourly.precipitation_probability.slice(0, 6)) : 70;
 
       // Hero Card
-      const heroTempEl = document.getElementById('mHeroTemp');
-      if (heroTempEl) heroTempEl.textContent = state.tempUnit === 'F' ? Math.round((cur.temperature_2m * 9/5) + 32) : Math.round(cur.temperature_2m);
-      
-      const heroDegreeEl = document.querySelector('.hero-temp-degree');
-      if (heroDegreeEl) heroDegreeEl.textContent = `°${state.tempUnit}`;
-
+      document.getElementById('mHeroTemp').textContent = Math.round(cur.temperature_2m);
       document.getElementById('mHeroConditionText').textContent = wmo.desc;
       document.getElementById('mHeroIcon').textContent = wmo.icon;
       document.getElementById('mStatRain').textContent = `${rainP}% Rain`;
@@ -2472,20 +2318,14 @@
       document.getElementById('mStatUV').textContent = `${uvVal ? uvVal.toFixed(1) : '4.2'} Mod`;
 
       // Live metrics tab
-      document.getElementById('mValTemp').textContent = formatTempExact(cur.temperature_2m);
-      document.getElementById('mValFeels').textContent = `Feels ${formatTempExact(cur.apparent_temperature || cur.temperature_2m)}`;
+      document.getElementById('mValTemp').textContent = `${cur.temperature_2m.toFixed(1)}°C`;
+      document.getElementById('mValFeels').textContent = `Feels ${cur.apparent_temperature ? cur.apparent_temperature.toFixed(1) : cur.temperature_2m.toFixed(1)}°C`;
       document.getElementById('mValRainChance').textContent = `${rainP}%`;
-      document.getElementById('mValRainQty').textContent = `${cur.precipitation !== undefined ? cur.precipitation : 2.4} mm/hr`;
+      document.getElementById('mValRainQty').textContent = `${cur.precipitation || 2.4} mm/hr`;
       document.getElementById('mValWind').textContent = `${Math.round(cur.wind_speed_10m)} km/h`;
       document.getElementById('mValGusts').textContent = `Gusts ${Math.round(cur.wind_gusts_10m || 38)} km/h`;
       document.getElementById('mValHumidity').textContent = `${cur.relative_humidity_2m}%`;
-      document.getElementById('mValPressure').textContent = `${Math.round(cur.pressure_msl || cur.surface_pressure || 1012)} hPa`;
-
-      const dewEl = document.getElementById('mValDewPoint');
-      if (dewEl) dewEl.textContent = formatTempExact(cur.dew_point_2m !== undefined ? cur.dew_point_2m : cur.temperature_2m - 4);
-
-      const visEl = document.getElementById('mValVisibility');
-      if (visEl) visEl.textContent = `Vis: ${cur.visibility !== undefined ? (cur.visibility / 1000).toFixed(1) : '10.0'} km`;
+      document.getElementById('mValPressure').textContent = `${Math.round(cur.pressure_msl || 1012)} hPa`;
 
       // Hourly Forecast Swiper
       const strip = document.getElementById('mHourlyScroll');
@@ -2496,8 +2336,7 @@
           const timeStr = new Date(data.hourly.time[i]).toLocaleTimeString([], { hour: 'numeric' });
           const code = data.hourly.weather_code[i];
           const info = interpretWmoCode(code);
-          const rawTemp = data.hourly.temperature_2m[i];
-          const tempVal = state.tempUnit === 'F' ? Math.round((rawTemp * 9/5) + 32) : Math.round(rawTemp);
+          const temp = Math.round(data.hourly.temperature_2m[i]);
           const p = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[i] : 0;
 
           const div = document.createElement('div');
@@ -2505,7 +2344,7 @@
           div.innerHTML = `
             <div class="m-hourly-time">${timeStr}</div>
             <div class="m-hourly-icon">${info.icon}</div>
-            <div class="m-hourly-temp">${tempVal}°</div>
+            <div class="m-hourly-temp">${temp}°</div>
             <div class="m-hourly-rain">💧${p}%</div>
           `;
           strip.appendChild(div);
@@ -2752,9 +2591,6 @@
       document.getElementById('mDomainTag').textContent = state.intent.label;
 
       const weatherData = await fetchWeatherData(state.location.latitude, state.location.longitude);
-      fetchAirQualityData(state.location.latitude, state.location.longitude);
-      fetchClimateNormals(state.location.latitude, state.location.longitude);
-
       const riskData = calculateMultiFactorRisk(state.intent, weatherData);
       state.riskScore = riskData.overall;
 
@@ -3224,19 +3060,6 @@
       }
       profileSheet.classList.remove('active');
     });
-
-    // --- Temperature Unit Toggle ---
-    const tempUnitBtn = document.getElementById('tempUnitToggleBtn');
-    if (tempUnitBtn) {
-      tempUnitBtn.addEventListener('click', () => {
-        state.tempUnit = state.tempUnit === 'C' ? 'F' : 'C';
-        tempUnitBtn.textContent = `°${state.tempUnit}`;
-        if (state.currentWeather) {
-          renderWeatherWidgets({ current: state.currentWeather, hourly: state.hourlyForecast });
-        }
-        fetchClimateNormals(state.location.latitude, state.location.longitude);
-      });
-    }
 
     // Initial load
     window.addEventListener('DOMContentLoaded', () => {

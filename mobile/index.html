@@ -67,7 +67,7 @@
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
             <circle cx="12" cy="10" r="3"></circle>
           </svg>
-          <span class="location-title" id="locationTitle">Bengaluru, IN</span>
+          <span class="location-title" id="locationTitle">Detecting...</span>
         </button>
       </div>
     </header>
@@ -145,6 +145,12 @@
           <div class="wave-bar"></div>
         </div>
 
+        <!-- Searching Weather Data Loading State Indicator -->
+        <div class="search-loading-bar" id="searchLoadingBar" style="display: none; padding: 6px 12px; margin-top: 8px; border-radius: 10px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.25); font-size: 11px; color: var(--primary); font-weight: 600; align-items: center; gap: 8px;">
+          <span style="font-size: 13px;">🔍</span>
+          <span id="searchLoadingText">Searching for verified weather data...</span>
+        </div>
+
         <!-- Horizontal Preset Scenario Pills -->
         <div class="scenario-scroll-row">
           <div class="s-pill" data-query="Will it rain during my evening commute?">🚗 Evening Commute</div>
@@ -175,6 +181,12 @@
             </svg>
             <span id="audioBtnText" data-i18n="listen">Listen</span>
           </button>
+        </div>
+
+        <!-- User Asked Question Display -->
+        <div class="user-asked-bubble" id="userQueryBubble" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border-radius: 12px; background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.18); font-size: 13px; color: var(--primary); font-weight: 600;">
+          <span style="font-size: 14px;">💬</span>
+          <span id="userQueryText">Will it rain during my evening commute?</span>
         </div>
 
         <h2 class="direct-answer-text" id="directAnswer">

@@ -136,3 +136,24 @@ def save_risk_report(
     db.commit()
     db.refresh(record)
     return record
+
+def get_recent_weather_cache(
+    db: Session,
+    loc_name: str,
+    max_age_minutes: int = 60
+) -> Optional[WeatherCache]:
+    """Retrieve recent weather data from database for matching location if available."""
+    if not db:
+        return None
+    try:
+        from datetime import datetime, timedelta
+        city = loc_name.split(',')[0].strip()
+        time_threshold = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+        record = db.query(WeatherCache).filter(
+            WeatherCache.location_name.ilike(f"%{city}%"),
+            WeatherCache.created_at >= time_threshold
+        ).order_by(WeatherCache.created_at.desc()).first()
+        return record
+    except Exception:
+        return None
+

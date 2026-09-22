@@ -5,7 +5,7 @@
 
 const API_CONFIG = {
   baseUrl: 'http://localhost:8000/api/v1',
-  timeoutMs: 5000
+  timeoutMs: 15000
 };
 
 class MeteoraAPIConnector {
@@ -51,78 +51,160 @@ class MeteoraAPIConnector {
   }
 
   /**
-   * Fetch live weather directly from Open-Meteo
+   * Fetch live weather directly from Open-Meteo (no mock fallback)
    */
   async getLiveWeather(latitude, longitude) {
-    try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m,dew_point_2m,visibility&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,uv_index&models=best_match,gfs_seamless&timezone=auto`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Open-Meteo fetch failed");
-      return await res.json();
-    } catch (err) {
-      console.warn("Using simulated meteorological fallback:", err);
-      return this._generateMockWeather();
-    }
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max&timezone=auto`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
+    return await res.json();
   }
 
   /**
-   * Direct client-side pipeline fallback when backend is offline
+   * Direct client-side pipeline fallback when backend is offline.
+   * Only uses real Open-Meteo data — never returns hardcoded dummy values.
    */
   async _directClientPipeline(payload) {
-    const weather = await this.getLiveWeather(payload.latitude, payload.longitude);
+    let weather;
+    try {
+      weather = await this.getLiveWeather(payload.latitude, payload.longitude);
+    } catch (err) {
+      // Cannot reach weather API either — surface a clean error to the UI
+      return {
+        source: 'ERROR',
+        data: {
+          query: payload.query,
+          language: payload.language || 'en',
+          location: payload.location_name,
+          data_source: 'Unavailable',
+          weather: {},
+          imd_alert: { color_code: 'Yellow', headline: 'WEATHER DATA UNAVAILABLE', bulletin: '' },
+          risk_analysis: { overall_score: 0, risk_level: 'UNKNOWN', dimensions: {} },
+          advisory: {
+            direct_answer: `Unable to retrieve live weather data for ${payload.location_name}. Please check your internet connection and try again.`,
+            immediate_actions: ['Check your internet connection.'],
+            preventive_actions: [],
+            best_windows: [],
+            smart_follow_ups: ['Try again', 'Check weather for current location']
+          }
+        }
+      };
+    }
+
     const cur = weather.current || {};
     const hourly = weather.hourly || {};
+    const daily = weather.daily || {};
     
-    const rainP = hourly.precipitation_probability ? Math.max(...hourly.precipitation_probability.slice(0, 6)) : 72;
-    const temp = cur.temperature_2m || 26.4;
-    const wind = cur.wind_speed_10m || 18.0;
-    const gusts = cur.wind_gusts_10m || 41.5;
+    const rainP = hourly.precipitation_probability ? Math.max(...hourly.precipitation_probability.slice(0, 6)) : 0;
+    const temp = cur.temperature_2m;
+    const feelsLike = cur.apparent_temperature ?? temp;
+    const wind = cur.wind_speed_10m ?? 0;
+    const gusts = cur.wind_gusts_10m ?? 0;
+    const humidity = cur.relative_humidity_2m ?? null;
+
+    if (temp == null) {
+      return {
+        source: 'ERROR',
+        data: {
+          query: payload.query,
+          language: payload.language || 'en',
+          location: payload.location_name,
+          data_source: 'Weather API (Open-Meteo)',
+          weather: {},
+          imd_alert: { color_code: 'Yellow', headline: 'NO DATA RETURNED', bulletin: '' },
+          risk_analysis: { overall_score: 0, risk_level: 'UNKNOWN', dimensions: {} },
+          advisory: {
+            direct_answer: `No current weather data returned for ${payload.location_name}. The location may not be supported.`,
+            immediate_actions: [],
+            preventive_actions: [],
+            best_windows: [],
+            smart_follow_ups: ['Try a nearby city', 'Enter coordinates manually']
+          }
+        }
+      };
+    }
+
+    const q = (payload.query || '').toLowerCase();
+    const city = payload.location_name.split(',')[0].trim();
+    const isTomorrow = q.includes('tomorrow');
+
+    let directAnswer = "";
+    if (q.includes('temp') || q.includes('hot') || q.includes('cold') || q.includes('heat')) {
+      if (isTomorrow) {
+        const tMax = daily.temperature_2m_max ? Math.round(daily.temperature_2m_max[1]) : null;
+        const tMin = daily.temperature_2m_min ? Math.round(daily.temperature_2m_min[1]) : null;
+        directAnswer = tMax != null && tMin != null
+          ? `Tomorrow in ${city}, expected high is ${tMax}°C and low is ${tMin}°C.`
+          : `Tomorrow's temperature data is not yet available for ${city}.`;
+      } else {
+        directAnswer = `The current temperature in ${city} is ${Math.round(temp)}°C (feels like ${Math.round(feelsLike)}°C).`;
+        if (daily.temperature_2m_max && daily.temperature_2m_max[0] != null) {
+          directAnswer += ` Expected high: ${Math.round(daily.temperature_2m_max[0])}°C, low: ${Math.round(daily.temperature_2m_min[0])}°C.`;
+        }
+      }
+    } else if (q.includes('rain') || q.includes('shower') || q.includes('precipitat') || q.includes('umbrella') || q.includes('wet')) {
+      if (isTomorrow) {
+        const rMax = daily.precipitation_probability_max ? Math.round(daily.precipitation_probability_max[1]) : null;
+        directAnswer = rMax != null
+          ? `Tomorrow in ${city}, there is a ${rMax}% chance of rain.`
+          : `Tomorrow's rain data is not yet available for ${city}.`;
+      } else {
+        directAnswer = `Today in ${city}, there is a ${Math.round(rainP)}% chance of rain. The current temperature is ${Math.round(temp)}°C.`;
+      }
+    } else if (q.includes('humid') || q.includes('moisture') || q.includes('damp')) {
+      directAnswer = humidity != null
+        ? `The relative humidity in ${city} is currently ${humidity}%, with a temperature of ${Math.round(temp)}°C.`
+        : `Humidity data is currently unavailable for ${city}.`;
+    } else if (q.includes('wind') || q.includes('gust') || q.includes('breeze')) {
+      directAnswer = `The current wind speed in ${city} is ${Math.round(wind)} km/h with gusts up to ${Math.round(gusts)} km/h.`;
+    } else {
+      directAnswer = `Current weather in ${city}: ${Math.round(temp)}°C, ${Math.round(rainP)}% chance of rain, wind ${Math.round(wind)} km/h.`;
+    }
 
     const commuteRisk = Math.min(100, Math.round(rainP * 0.6 + gusts * 0.6));
     const safetyRisk = Math.min(100, Math.round(rainP * 0.4 + wind * 0.8));
     const healthRisk = Math.min(100, Math.round(temp > 33 ? 55 : 28));
     const overall = Math.min(98, Math.max(15, Math.round(commuteRisk * 0.65 + safetyRisk * 0.35)));
-
     const riskLevel = overall >= 75 ? "SEVERE" : overall >= 50 ? "HIGH" : overall >= 25 ? "MODERATE" : "LOW";
-
-    // Multi-lingual fallback responses
-    const lang = payload.language || 'en';
-    const localized = this._getLocalizedAdvisory(payload.query, lang, rainP, gusts, payload.location_name);
 
     return {
       source: 'DIRECT_CLIENT_ENGINE',
       data: {
         query: payload.query,
-        language: lang,
+        language: payload.language || 'en',
         location: payload.location_name,
+        data_source: 'Weather API (Open-Meteo)',
         weather: {
           temperature: temp,
-          feels_like: cur.apparent_temperature || temp,
+          feels_like: feelsLike,
           precipitation_probability: rainP,
           wind_speed: wind,
           wind_gusts: gusts,
-          weather_code: cur.weather_code || 63
+          weather_code: cur.weather_code ?? 0
         },
         imd_alert: {
           color_code: overall >= 50 ? "Orange" : "Yellow",
-          headline: localized.alertHeader,
-          bulletin: `Upper air convective circulation active over ${payload.location_name.split(',')[0]}. Thunderstorms with gusts to ${Math.round(gusts)} km/h possible.`
+          headline: `METEOROLOGICAL BULLETIN: ${city.toUpperCase()}`,
+          bulletin: `Live weather observation for ${city}. Temperature: ${Math.round(temp)}°C. Wind: ${Math.round(wind)} km/h.`
         },
         risk_analysis: {
           overall_score: overall,
           risk_level: riskLevel,
-          dimensions: {
-            commute: commuteRisk,
-            safety: safetyRisk,
-            health: healthRisk
-          }
+          dimensions: { commute: commuteRisk, safety: safetyRisk, health: healthRisk }
         },
         advisory: {
-          direct_answer: localized.directAnswer,
-          immediate_actions: localized.immediateActions,
-          preventive_actions: localized.preventiveActions,
-          best_windows: localized.bestWindows,
-          smart_follow_ups: localized.followUps
+          direct_answer: directAnswer,
+          immediate_actions: [
+            `Check conditions in ${city} before travel.`,
+            gusts > 0 ? `Expected wind gusts up to ${Math.round(gusts)} km/h.` : `Current wind speed: ${Math.round(wind)} km/h.`
+          ],
+          preventive_actions: ["Keep mobile devices charged above 50%.", "Stay informed of weather updates."],
+          best_windows: [`Safest travel window: Current conditions (${Math.round(temp)}°C, ${Math.round(rainP)}% rain chance).`],
+          smart_follow_ups: [
+            `What is tomorrow's forecast in ${city}?`,
+            `What is the humidity in ${city}?`,
+            `What are the wind conditions in ${city}?`
+          ]
         }
       }
     };
@@ -218,26 +300,13 @@ class MeteoraAPIConnector {
     };
   }
 
+  /**
+   * No mock weather data. If we can't reach Open-Meteo, we surface an error.
+   * This method is intentionally left as a stub that throws to prevent
+   * fake/hardcoded data from ever appearing in the app.
+   */
   _generateMockWeather() {
-    const now = new Date();
-    return {
-      current: {
-        temperature_2m: 26.4,
-        apparent_temperature: 28.1,
-        relative_humidity_2m: 78,
-        precipitation: 2.4,
-        weather_code: 63,
-        wind_speed_10m: 18.2,
-        wind_gusts_10m: 41.5,
-        pressure_msl: 1012.4
-      },
-      hourly: {
-        time: Array.from({length: 8}, (_, i) => new Date(now.getTime() + i * 3600000).toISOString()),
-        temperature_2m: [26.4, 25.8, 24.5, 24.0, 23.5, 23.0, 22.8, 22.5],
-        precipitation_probability: [35, 55, 75, 82, 65, 40, 25, 15],
-        weather_code: [2, 61, 63, 65, 63, 80, 2, 2]
-      }
-    };
+    throw new Error("Live weather data unavailable. Please check your internet connection.");
   }
 }
 
